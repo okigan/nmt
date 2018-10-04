@@ -18,7 +18,6 @@ import nmt_timeit
 import util
 from util import manifiq_url, get_bucket, get_key
 
-s3client = boto3.client('s3', region_name='us-west-2')
 
 
 def get_s3client():
@@ -229,7 +228,7 @@ def encode_chunk(destination: str, source: str, start_time_sec: float, duration_
                f'-ss {start_time_sec} '
                f'-t {duration_sec} '
                f'-vf drawtext="text=\'{msg}\'" '
-               f'-c:v libx264 -preset ultrafast {chunk_file_tmp} '
+               f'-c:v libx264 -preset ultrafast -strict -2 {chunk_file_tmp} '
                f'1>{chunk_file_stdout} '
                f'2>{chunk_file_stderr}')
     util.run(command)
@@ -258,7 +257,7 @@ def encode_chunks(source, chunks):
 
 
 def encode_chunk_main(chunk, i, n, source):
-    chunk_file = generate_intermedite_object_path(f'chunk{i}.mov', [i, n, source, 'v4'])
+    chunk_file = generate_intermedite_object_path(f'chunk{i}.mov', [i, n, source, 'v55555'])
     start_time = float(chunk[0]['best_effort_timestamp_time'])
     duration = float(chunk[1]['best_effort_timestamp_time']) - start_time
     return encode_chunk(chunk_file, source, start_time, duration, i, n)
@@ -297,7 +296,7 @@ def analyze_source(url: str) -> FrameData:
         stderr = tempfile.mktemp("frames_err")
         command = f"ffprobe -show_frames -print_format json '{murl}' 1>{stdout} 2>{stderr}"
         util.run(command)
-        os.rename(stdout, final_name)
+        shutil.move(stdout, final_name)
 
     with open(final_name) as s:
         return FrameData(json.load(s))
