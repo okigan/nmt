@@ -11,6 +11,7 @@ from typing import *
 
 import boto3
 # import fire
+import fire
 import ray
 import smart_open
 
@@ -19,9 +20,8 @@ import util
 from util import manifiq_url, get_bucket, get_key
 
 
-
 def get_s3client():
-    return boto3.client('s3', region_name='us-west-2')
+    return boto3.client('s3')
 
 
 def echo(e):
@@ -269,7 +269,7 @@ def hash(input: object):
 
 def generate_intermedite_object_path(s: str, o: object):
     suffix = f'{s}_{hash(o)}'
-    bucket = 'us-west-2.netflix.s3.genpop.test'
+    bucket = 'netflix.s3.genpop.test'
     prefix = 'mce/temp/maple_exp/intermediate_obj'
     return os.path.join("s3://", bucket, prefix, suffix)
 
@@ -337,13 +337,12 @@ def transcode(source: str, destination: str, trim_start_sec: float = None, trim_
     return return_code
 
 
-#
-# class Nmt(object):
-#     def transcode(self, source: str, destination: str, trim_start_sec=20, trim_duration_sec=10):
-#         transcode(source,
-#                   destination,
-#                   trim_start_sec=trim_start_sec,
-#                   trim_duration_sec=trim_duration_sec)
+class Nmt(object):
+    def transcode(self, source: str, destination: str, trim_start_sec=20, trim_duration_sec=10):
+        transcode(source,
+                  destination,
+                  trim_start_sec=trim_start_sec,
+                  trim_duration_sec=trim_duration_sec)
 
 
 def x(url):
@@ -352,9 +351,9 @@ def x(url):
                                                  Params={'Bucket': (get_bucket(result)), 'Key': (get_key(result))})
 
 
-# # print(x('s3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/output/s3_put.mp4'))
-# def main():
-#     fire.Fire(Nmt)
+# print(x('s3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/output/s3_put.mp4'))
+def main():
+    fire.Fire(Nmt)
 
 
 @ray.remote
@@ -369,8 +368,8 @@ def add2(a, b):
 if __name__ == '__main__':
     ray.init()
 
-    x_id = add2.remote(1, 2)
-    print(ray.get(x_id))
+    # x_id = add2.remote(1, 2)
+    # print(ray.get(x_id))
 
     # x_id = step.remote(lambda x: x*2, 2)
     # print(ray.get(x_id))
@@ -379,7 +378,7 @@ if __name__ == '__main__':
     # vals = [ray.get(oid) for oid in oids]
     # print(vals)
 
-    transcode('s3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/data/bbb_sunflower_1080p_30fps_normal.mp4',
-              's3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/output/bbb_sunflower_1080p_30fps_normal4.mp4')
+    # transcode('s3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/data/bbb_sunflower_1080p_30fps_normal.mp4',
+    #           's3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/output/bbb_sunflower_1080p_30fps_normal4.mp4')
 
-    # main()
+    main()

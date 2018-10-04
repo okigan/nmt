@@ -9,7 +9,7 @@ from enum import Enum
 
 import boto3
 
-s3 = boto3.client('s3', region_name='us-west-2')
+s3 = boto3.client('s3')
 
 
 def make_dir(working_dir):
