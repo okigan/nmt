@@ -9,8 +9,6 @@ from enum import Enum
 
 import boto3
 
-s3 = boto3.client('s3')
-
 
 def make_dir(working_dir):
     try:
@@ -97,10 +95,24 @@ def get_key(result: urllib.parse.ParseResult):
 
 def httpfy_cloud(source: str, s3client) -> str:
     result = urllib.parse.urlparse(source)
-    bucket = s3client.get_bucket_location(Bucket=(get_bucket(result)))
+    bucket = s3client.get_bucket_location(Bucket=get_bucket(result))
     region = bucket['LocationConstraint']
+    s3client = get_s3client(region)
 
-    return s3client.generate_presigned_url(ClientMethod='get_object', Params={'Bucket': (get_bucket(result)), 'Key': (get_key(result))})
+    return s3client.generate_presigned_url(ClientMethod='get_object',
+                                           Params={'Bucket': (get_bucket(result)), 'Key': (get_key(result))})
+
+
+client_cache = {}
+
+
+def get_s3client(region_name=None):
+    client = client_cache.get(region_name, None)
+
+    if client is None:
+        client = boto3.client('s3', region_name=region_name)
+        client_cache[region_name] = client
+    return client
 
 
 class MountedFile(object):
@@ -167,7 +179,7 @@ def manifiq_url(url, mode: str = 'r', target: MMode = MMode.HTTP, *args, **kw):
 
     if target == MMode.HTTP:
         if result.scheme == 's3':
-            return httpfy_cloud(url, s3)
+            return httpfy_cloud(url, get_s3client())
     elif target == MMode.MOUNT_SEQUENCIAL:
         if result.scheme == 's3':
             return mount_cloud(url)

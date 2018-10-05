@@ -17,11 +17,8 @@ import smart_open
 
 import nmt_timeit
 import util
-from util import manifiq_url, get_bucket, get_key
+from util import manifiq_url, get_bucket, get_key, get_s3client
 
-
-def get_s3client():
-    return boto3.client('s3')
 
 
 def echo(e):
@@ -101,22 +98,26 @@ def log(param):
     print(param)
 
 
-def concatenate(sources: Union[List[str], List[Source]], destination):
+def concatenate(sources: Union[List[str], List[Source], Iterator[str]], destination):
     if smart_exists(destination):
         log("skipping concatenate as output already exists")
         return 0
 
-    if isinstance(sources, List) and all(isinstance(elem, str) for elem in sources):
-        sources = [Source(s) for s in sources]
-
     import tempfile
     destination_tmp = tempfile.mktemp('', prefix=util.get_curr_function_name())
 
+    if isinstance(sources, List) and all(isinstance(elem, str) for elem in sources):
+        sources = [Source(s) for s in sources]
+
+
     lines = []
     for source in sources:
-        lines += [f"file '{manifiq_url(source.path)}'"]
-        lines += [f"inpoint {source.inpoint}" if source.inpoint is not None else ""]
-        lines += [f"outpoint {source.outpoint}" if source.outpoint is not None else ""]
+        if isinstance(source, str):
+            lines += [f"file '{manifiq_url(source)}'"]
+        elif isinstance(source, Source):
+            lines += [f"file '{manifiq_url(source.path)}'"]
+            lines += [f"inpoint {source.inpoint}" if source.inpoint is not None else ""]
+            lines += [f"outpoint {source.outpoint}" if source.outpoint is not None else ""]
 
     list_file_path = os.path.join("list.txt")
     with open(list_file_path, "w") as listing_file:
@@ -127,7 +128,8 @@ def concatenate(sources: Union[List[str], List[Source]], destination):
 
     return_code = util.run(
         f'ffmpeg -y -f concat -safe 0 '
-        f'-protocol_whitelist file,http,https,tcp,tls -i {list_file_path} '
+        # f'-protocol_whitelist file,http,https,tcp,tls -i {list_file_path} ' #for ffmpeg 4.+
+        f'-i {list_file_path} '
         f'-c copy -f mp4 {destination_tmp} 1>{concat_stdout} 2>{concat_stderr}')
 
     smart_move(destination_tmp, destination)
@@ -257,7 +259,7 @@ def encode_chunks(source, chunks):
 
 
 def encode_chunk_main(chunk, i, n, source):
-    chunk_file = generate_intermedite_object_path(f'chunk{i}.mov', [i, n, source, 'v55555'])
+    chunk_file = generate_intermedite_object_path(f'chunk{i}.mov', [i, n, source, 'v6'])
     start_time = float(chunk[0]['best_effort_timestamp_time'])
     duration = float(chunk[1]['best_effort_timestamp_time']) - start_time
     return encode_chunk(chunk_file, source, start_time, duration, i, n)
@@ -338,7 +340,7 @@ def transcode(source: str, destination: str, trim_start_sec: float = None, trim_
 
 
 class Nmt(object):
-    def transcode(self, source: str, destination: str, trim_start_sec=20, trim_duration_sec=10):
+    def transcode(self, source: str, destination: str, trim_start_sec=None, trim_duration_sec=None):
         transcode(source,
                   destination,
                   trim_start_sec=trim_start_sec,
