@@ -1,4 +1,5 @@
 from nmt import *
+from smart import smart_exists, smart_delete
 
 bbb_source = "s3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/data/bbb_sunflower_1080p_30fps_normal.mp4"
 bbb_detination = "s3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/test_output/out.mp4"

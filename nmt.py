@@ -1,24 +1,15 @@
-# ffprobe -show_frames -print_format json
 import json
 import os
 import shutil
-import sys
 import tempfile
-# import threading
-import time
-import urllib.parse
 from typing import *
 
-import boto3
-# import fire
 import fire
 import ray
-import smart_open
 
-import nmt_timeit
 import util
-from util import manifiq_url, get_bucket, get_key, get_s3client
-
+from smart import smart_exists, smart_move
+from util import manifiq_url
 
 
 def echo(e):
@@ -109,7 +100,6 @@ def concatenate(sources: Union[List[str], List[Source], Iterator[str]], destinat
     if isinstance(sources, List) and all(isinstance(elem, str) for elem in sources):
         sources = [Source(s) for s in sources]
 
-
     lines = []
     for source in sources:
         if isinstance(source, str):
@@ -137,83 +127,8 @@ def concatenate(sources: Union[List[str], List[Source], Iterator[str]], destinat
     return return_code
 
 
-def smart_exists(url) -> bool:
-    result = urllib.parse.urlparse(url)
-    if result.scheme in ['', 'file']:
-        return os.path.exists(url)
-    elif result.scheme == 's3':
-        try:
-            response = get_s3client().head_object(Bucket=get_bucket(result), Key=get_key(result))
-            size = response['ContentLength']
-            return size > 0
-        except Exception as e:
-            return False
-
-
-def smart_delete(url):
-    result = urllib.parse.urlparse(url)
-    if result.scheme in ['', 'file']:
-        return os.remove(url)
-    elif result.scheme == 's3':
-        response = get_s3client().delete_object(Bucket=get_bucket(result), Key=get_key(result))
-
-
-class ProgressPercentage(object):
-    KB = 1024
-    MB = KB * 1024
-
-    def __init__(self, size, desc=None):
-        self.desc = desc
-        self.size = size
-        self.seen_so_far = 0
-        self.startTs = time.time()
-        self.updatedTs = 0
-
-    def __call__(self, bytes_amount):
-        self.seen_so_far += bytes_amount
-        now = time.time()
-        if now - self.updatedTs > 5:
-            speedMBPs = self.method_name(now)
-            percent = 100 * self.seen_so_far / (1.0 * self.size) if self.size != 0 else '-'
-            sys.stdout.write('{} / {} = {}% @ {} MB/s for {}\n'.format(self.seen_so_far, self.size, percent, speedMBPs, self.desc))
-            sys.stdout.flush()
-            self.updatedTs = now
-
-    def method_name(self, now):
-        return (self.seen_so_far / self.MB) / (now - self.startTs)
-
-
-def smart_size(url):
-    result = urllib.parse.urlparse(url)
-    if result.scheme in ['', 'file']:
-        return os.path.getsize(url)
-    elif result.scheme == 's3':
-        try:
-            response = get_s3client().head_object(Bucket=get_bucket(result), Key=get_key(result))
-            size = response['ContentLength']
-            return size > 0
-        except Exception as e:
-            return False
-
-
-@nmt_timeit.ftimer
-def smart_move(source, destination):
-    result = urllib.parse.urlparse(destination)
-
-    if result.scheme in ['', 'file']:
-        with smart_open.smart_open(source, 'rb') as src:
-            with smart_open.smart_open(destination, 'wb') as dst:
-                shutil.copyfileobj(src, dst)
-    elif result.scheme == 's3':
-
-        # get_s3client().upload_file(source, get_bucket(result), get_key(result))
-        transfer = boto3.s3.transfer.S3Transfer(get_s3client())
-        transfer.upload_file(source, get_bucket(result), get_key(result), callback=ProgressPercentage(smart_size(source), source))
-        os.remove(source)
-
-
 def encode_chunk(destination: str, source: str, start_time_sec: float, duration_sec: float, i: int, n: int):
-    print('processing chunk {0}/{1}'.format(i, n))
+    log('processing chunk {0}/{1}'.format(i, n))
 
     if smart_exists(destination):
         log("skipping encode_chunk")
@@ -240,24 +155,6 @@ def encode_chunk(destination: str, source: str, start_time_sec: float, duration_
     return destination
 
 
-def encode_chunks(source, chunks):
-    enumerated_chunks = enumerate(chunks)
-    n = len(chunks)
-
-    # chunk_files = map(lambda o: encode_chunk_main(o[1], o[0], n, source), list(enumerated_chunks))
-
-    chunk_files = raymap(lambda o: encode_chunk_main(o[1], o[0], n, source), list(enumerated_chunks))
-
-    # chunk_files = []
-    # for i, c in enumerated_chunks:
-    #     # oid = encode_chunk_main.remote(c, i, n, source)
-    #     oid = add2.remote(5,6)
-    #     val = ray.get(oid)
-    #     chunk_files += [val]
-    #
-    return chunk_files
-
-
 def encode_chunk_main(chunk, i, n, source):
     chunk_file = generate_intermedite_object_path(f'chunk{i}.mov', [i, n, source, 'v6'])
     start_time = float(chunk[0]['best_effort_timestamp_time'])
@@ -265,13 +162,28 @@ def encode_chunk_main(chunk, i, n, source):
     return encode_chunk(chunk_file, source, start_time, duration, i, n)
 
 
-def hash(input: object):
-    return util.md5(json.dumps(input, ensure_ascii=False).encode('utf8'))
+def encode_chunks(source, chunks):
+    enumerated_chunks = enumerate(chunks)
+    n = len(chunks)
+
+    chunk_files = list(map(lambda o: encode_chunk_main(o[1], o[0], n, source), list(enumerated_chunks)))
+
+    #chunk_files = raymap(lambda o: encode_chunk_main(o[1], o[0], n, source), list(enumerated_chunks))
+
+    return chunk_files
 
 
 def generate_intermedite_object_path(s: str, o: object):
-    suffix = f'{s}_{hash(o)}'
-    bucket = 'netflix.s3.genpop.test'
+    import boto3
+    session = boto3.session.Session()
+    region = session.region_name
+
+    buckets = {
+        'us-east-1': 'netflix.s3.genpop.test',
+        'us-west-2': 'us-west-2.netflix.s3.genpop.test'
+    }
+    bucket = buckets.get(region, 'netflix.s3.genpop.test')
+    suffix = f'{s}_{util.hash(o)}'
     prefix = 'mce/temp/maple_exp/intermediate_obj'
     return os.path.join("s3://", bucket, prefix, suffix)
 
@@ -306,13 +218,13 @@ def analyze_source(url: str) -> FrameData:
 
 def get_key_frames(video_frames, trim_start_sec=None, trim_duration_sec=None):
     if trim_start_sec is not None:
-        video_frames = filter(lambda f: float(f['best_effort_timestamp_time']) >= trim_start_sec, video_frames)
+        video_frames = [f for f in video_frames if float(f['best_effort_timestamp_time']) >= trim_start_sec]
 
     if trim_duration_sec is not None:
-        video_frames = filter(lambda f: float(f['best_effort_timestamp_time']) < trim_start_sec + trim_duration_sec, video_frames)
+        video_frames = [f for f in video_frames if float(f['best_effort_timestamp_time']) < (trim_start_sec + trim_duration_sec)]
 
     video_frames = list(video_frames)
-    key_frames = list(filter(lambda f: f['pict_type'] == 'I', video_frames))
+    key_frames = [f for f in video_frames if f['pict_type'] == 'I']
     key_frames = list(key_frames)
 
     if key_frames[0]['coded_picture_number'] != video_frames[0]['coded_picture_number']:
@@ -347,20 +259,8 @@ class Nmt(object):
                   trim_duration_sec=trim_duration_sec)
 
 
-def x(url):
-    result = urllib.parse.urlparse(url)
-    return get_s3client().generate_presigned_url(ClientMethod='put_object',
-                                                 Params={'Bucket': (get_bucket(result)), 'Key': (get_key(result))})
-
-
-# print(x('s3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/output/s3_put.mp4'))
 def main():
     fire.Fire(Nmt)
-
-
-@ray.remote
-def add2(a, b):
-    return a + b
 
 
 # python nmt.py transcode
@@ -369,18 +269,5 @@ def add2(a, b):
 # #   --trim_start 4
 if __name__ == '__main__':
     ray.init()
-
-    # x_id = add2.remote(1, 2)
-    # print(ray.get(x_id))
-
-    # x_id = step.remote(lambda x: x*2, 2)
-    # print(ray.get(x_id))
-    #
-    # oids = [step.remote(lambda x: x*2, i) for i in [3,4]]
-    # vals = [ray.get(oid) for oid in oids]
-    # print(vals)
-
-    # transcode('s3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/data/bbb_sunflower_1080p_30fps_normal.mp4',
-    #           's3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/output/bbb_sunflower_1080p_30fps_normal4.mp4')
 
     main()

@@ -173,7 +173,7 @@ def concatenate(sources: Union[List[str], List[Source]], destination):
         sources = [Source(s) for s in sources]
 
     import tempfile
-    destination_tmp = tempfile.mktemp('', prefix=util.get_curr_function_name())
+    destination_tmp = tempfile.mktemp(util.get_curr_function_name(), hash([sources, util.get_curr_function_name()]))
 
     lines = []
     for source in sources:
@@ -276,8 +276,8 @@ def encode_chunk(destination: str, source: str, start_time_sec: float, duration_
     return destination
 
 
-def hash(input: object):
-    return util.md5(json.dumps(input, ensure_ascii=False).encode('utf8'))
+def hash(*args):
+    return util.md5(json.dumps(args, ensure_ascii=False).encode('utf8'))
 
 
 def generate_intermedite_object_path(s: str, o: object):
@@ -406,6 +406,7 @@ def x(url):
 
 
 ndp.init()
+
 
 # print(x('s3://us-west-2.netflix.s3.genpop.test/mce/temp/maple_exp/output/s3_put.mp4'))
 def main():

@@ -95,23 +95,30 @@ def get_key(result: urllib.parse.ParseResult):
 
 def httpfy_cloud(source: str, s3client) -> str:
     result = urllib.parse.urlparse(source)
-    bucket = s3client.get_bucket_location(Bucket=get_bucket(result))
-    region = bucket['LocationConstraint']
-    s3client = get_s3client(region)
+    s3client = get_s3client_for_bucket(source)
 
     return s3client.generate_presigned_url(ClientMethod='get_object',
                                            Params={'Bucket': (get_bucket(result)), 'Key': (get_key(result))})
+
+
+def get_s3client_for_bucket(source: str):
+    result = urllib.parse.urlparse(source)
+    bucket = get_s3client().get_bucket_location(Bucket=get_bucket(result))
+    region = bucket['LocationConstraint']
+    s3client = get_s3client(region)
+    return s3client
 
 
 client_cache = {}
 
 
 def get_s3client(region_name=None):
-    client = client_cache.get(region_name, None)
+    key = hash(region_name, os.getpid())
+    client = client_cache.get(key, None)
 
     if client is None:
         client = boto3.client('s3', region_name=region_name)
-        client_cache[region_name] = client
+        client_cache[key] = client
     return client
 
 
@@ -183,3 +190,7 @@ def manifiq_url(url, mode: str = 'r', target: MMode = MMode.HTTP, *args, **kw):
     elif target == MMode.MOUNT_SEQUENCIAL:
         if result.scheme == 's3':
             return mount_cloud(url)
+
+
+def hash(*args):
+    return md5(json.dumps(args, ensure_ascii=False).encode('utf8'))
