@@ -156,7 +156,7 @@ def encode_chunk(destination: str, source: str, start_time_sec: float, duration_
 
 
 def encode_chunk_main(chunk, i, n, source):
-    chunk_file = generate_intermedite_object_path(f'chunk{i}.mov', [i, n, source, 'v6'])
+    chunk_file = generate_intermedite_object_path(f'chunk{i}.mov', [chunk, i, n, source, 'v6'])
     start_time = float(chunk[0]['best_effort_timestamp_time'])
     duration = float(chunk[1]['best_effort_timestamp_time']) - start_time
     return encode_chunk(chunk_file, source, start_time, duration, i, n)

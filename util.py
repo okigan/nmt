@@ -6,6 +6,7 @@ import time
 import urllib
 import urllib.parse
 from enum import Enum
+from typing import List
 
 import boto3
 
@@ -170,7 +171,7 @@ def mount_cloud(source: str, tmp: str = "~/tmp", mode='r') -> MountedFile:
         return MountedFile(mktemp, mode)
 
 
-def manifiq_url(url, mode: str = 'r', target: MMode = MMode.HTTP, *args, **kw):
+def manifiq_url(url, mode: str = 'r', targets: List[MMode] = None, *args, **kw):
     """
     Magically transform url into desired alternative, ex, S3 path into signed http url
     :param url:
@@ -179,17 +180,22 @@ def manifiq_url(url, mode: str = 'r', target: MMode = MMode.HTTP, *args, **kw):
     :param args:
     :param kw:
     """
+
+    if targets is None:
+        targets = [MMode.HTTP, MMode.MOUNT_SEQUENTIAL, MMode.MOUNT_RANDOM]
+
     result = urllib.parse.urlparse(url)
 
-    if schemaOk(result.scheme, target):
-        return url
+    for target in targets:
+        if schemaOk(result.scheme, target):
+            return url
 
-    if target == MMode.HTTP:
-        if result.scheme == 's3':
-            return httpfy_cloud(url, get_s3client())
-    elif target == MMode.MOUNT_SEQUENCIAL:
-        if result.scheme == 's3':
-            return mount_cloud(url)
+        if target == MMode.HTTP:
+            if result.scheme == 's3':
+                return httpfy_cloud(url, get_s3client())
+        elif target == MMode.MOUNT_SEQUENCIAL:
+            if result.scheme == 's3':
+                return mount_cloud(url)
 
 
 def hash(*args):
