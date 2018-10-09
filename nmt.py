@@ -138,14 +138,14 @@ def encode_chunk(destination: str, source: str, start_time_sec: float, duration_
     chunk_file_stdout = os.path.join('chunk{0}.stdout'.format(i))
     chunk_file_stderr = os.path.join('chunk{0}.stderr'.format(i))
 
-    # command = 'ffmpeg -y -i {0} -ss {1} -t {2} -c:v prores -profile:v 3 {3} 1>{4} 2>{5}'. \
     msg = f'chunk {i}/{n} start {start_time_sec}  duration {duration_sec}'
 
     command = (f"ffmpeg -y -i '{manifiq_url(source)}' "
                f'-ss {start_time_sec} '
                f'-t {duration_sec} '
                f'-vf drawtext="text=\'{msg}\'" '
-               f'-c:v libx264 -preset ultrafast -strict -2 {chunk_file_tmp} '
+               # f'-c:v libx264 -preset ultrafast -strict -2 {chunk_file_tmp} ' #h264
+               f'-c:v prores -profile:v 2 -strict -2 {chunk_file_tmp} '  # prores
                f'1>{chunk_file_stdout} '
                f'2>{chunk_file_stderr}')
     util.run(command)
