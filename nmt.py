@@ -1,11 +1,12 @@
 import json
 import os
-import shutil
 import tempfile
+from multiprocessing.pool import ThreadPool as Pool
 from typing import *
 
 import fire
 import ray
+from smart_open import smart_open
 
 import util
 from smart import smart_exists, smart_move
@@ -26,7 +27,7 @@ class FrameData:
 
 def get_chunks_from_key_frames(key_frames: List[Dict], min_chunk_duration_sec: int = None):
     if min_chunk_duration_sec == None:
-        min_chunk_duration_sec = 60
+        min_chunk_duration_sec = 15
 
     chunks = []
     prev_frame = key_frames[0]
@@ -120,7 +121,7 @@ def concatenate(sources: Union[List[str], List[Source], Iterator[str]], destinat
         f'ffmpeg -y -f concat -safe 0 '
         # f'-protocol_whitelist file,http,https,tcp,tls -i {list_file_path} ' #for ffmpeg 4.+
         f'-i {list_file_path} '
-        f'-c copy -f mp4 {destination_tmp} 1>{concat_stdout} 2>{concat_stderr}')
+        f'-c copy -f mov {destination_tmp} 1>{concat_stdout} 2>{concat_stderr}')
 
     smart_move(destination_tmp, destination)
 
@@ -166,9 +167,11 @@ def encode_chunks(source, chunks):
     enumerated_chunks = enumerate(chunks)
     n = len(chunks)
 
-    chunk_files = list(map(lambda o: encode_chunk_main(o[1], o[0], n, source), list(enumerated_chunks)))
+    #chunk_files = list(map(lambda o: encode_chunk_main(o[1], o[0], n, source), list(enumerated_chunks)))
 
-    #chunk_files = raymap(lambda o: encode_chunk_main(o[1], o[0], n, source), list(enumerated_chunks))
+    chunk_files = list(Pool().map(lambda o: encode_chunk_main(o[1], o[0], n, source), list(enumerated_chunks)))
+
+    # chunk_files = raymap(lambda o: encode_chunk_main(o[1], o[0], n, source), list(enumerated_chunks))
 
     return chunk_files
 
@@ -203,16 +206,16 @@ def raymap(func, iter):
 def analyze_source(url: str) -> FrameData:
     murl = manifiq_url(url)
 
-    final_name = "frames.json"
+    final_name = generate_intermedite_object_path(f'frames.json', [url, 'v6'])
 
     if not smart_exists(final_name):
         stdout = tempfile.mktemp("frames_out")
         stderr = tempfile.mktemp("frames_err")
         command = f"ffprobe -show_frames -print_format json '{murl}' 1>{stdout} 2>{stderr}"
         util.run(command)
-        shutil.move(stdout, final_name)
+        smart_move(stdout, final_name)
 
-    with open(final_name) as s:
+    with smart_open(final_name) as s:
         return FrameData(json.load(s))
 
 

@@ -67,13 +67,13 @@ class ProgressPercentage(object):
         self.seen_so_far += bytes_amount
         now = time.time()
         if now - self.updatedTs > 5:
-            speedMBPs = self.method_name(now)
-            percent = 100 * self.seen_so_far / (1.0 * self.size) if self.size != 0 else '-'
+            speedMBPs = self.calc_speed(now)
+            percent = 100.0 * self.seen_so_far / self.size if self.size != 0 else '-'
             sys.stdout.write('{} / {} = {}% @ {} MB/s for {}\n'.format(self.seen_so_far, self.size, percent, speedMBPs, self.desc))
             sys.stdout.flush()
             self.updatedTs = now
 
-    def method_name(self, now):
+    def calc_speed(self, now):
         return (self.seen_so_far / self.MB) / (now - self.startTs)
 
 

@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: An nmt Serverless Specification template.
+
+Globals:
+    Function:
+        Timeout: 15
+
+Resources:
+
+  echo:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: nmt_awslambda.py.echo
+      Runtime: python3.6
+      Description: ''
+      MemorySize: 128
+      Environment:
+        Variables:
+          CONVERT_ARN: !GetAtt convert.Arn
+      Policies:
+      Events:
+        LambdaMicroservice:
+          Type: Api
+          Properties:
+            Path: /echo
+            Method: ANY
+
+  analyze:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: nmt_awslambda.py.analyze
+      Runtime: python3.6
+      Description: ''
+      MemorySize: 512
+      Policies:
+        - S3CrudPolicy:
+            BucketName: 'nflx-lambda-wildwildwest-us-east-1'
+      Environment:
+        Variables:
+          PARAM1: VALUE
+      Events:
+        LambdaMicroservice:
+          Type: Api
+          Properties:
+            Path: /process
+            Method: ANY
+#      Role: !GetAtt processExplicitRole.Arn
+  processPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt process.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*/*/*'
+
+Outputs:
+    echoFunction:
+      Description: "Hello World Lambda Function ARN"
+      Value: !GetAtt echo.Arn
+
+    analyzeFunction:
+      Description: "Analyze Lambda Function ARN"
+      Value: !GetAtt analyze.Arn
