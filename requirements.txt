@@ -14,7 +14,7 @@ backports.weakref==1.0.post1
 bcrypt==3.1.4
 beautifulsoup4==4.6.0
 binaryornot==0.4.4
-bleach==2.1.1
+bleach==3.1.1
 blessings==1.6
 bokeh==0.13.0
 boto==2.49.0
