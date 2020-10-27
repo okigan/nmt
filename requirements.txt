@@ -33,7 +33,7 @@ ConfigArgParse==0.12.0
 configparser==3.5.0
 cookiecutter==1.6.0
 coursera-dl==0.9.0
-cryptography==2.1.4
+cryptography==3.2
 cv2wrap==1.0
 cycler==0.10.0
 dask==0.16.0
