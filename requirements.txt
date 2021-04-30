@@ -124,7 +124,7 @@ readchar==0.7
 redis==2.10.6
 regex==2018.8.29
 requests==2.18.4
-rsa==3.4.2
+rsa==4.7
 ruamel.yaml==0.15.34
 s3transfer==0.1.12
 scikit-image==0.13.1
